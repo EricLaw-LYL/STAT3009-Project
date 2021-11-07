@@ -67,7 +67,7 @@ class item_mean(object):
 
 class LFM(object):
 
-    def __init__(self, n_user, n_item, lam=.001, K=10, iterNum=10, tol=1e-4, verbose=1):
+    def __init__(self, n_user, n_item, lam=.001, K=10, iterNum=1000, tol=1e-4, verbose=1):
         self.P = np.random.randn(n_user, K)
         self.Q = np.random.randn(n_item, K)
         # self.index_item = []
@@ -80,7 +80,7 @@ class LFM(object):
         self.tol = tol
         self.verbose = verbose
 
-    def fit(self, train_pair, train_rating):
+    def fit(self, train_pair, train_rating, learning_rate=0.0001):
         diff, tol = 1., self.tol
         n_user, n_item, n_obs = self.n_user, self.n_item, len(train_pair)
         K, iterNum, lam = self.K, self.iterNum, self.lam
@@ -92,41 +92,18 @@ class LFM(object):
         for i in range(iterNum):
             ## item update
             score_old = self.rmse(test_pair=train_pair, test_rating=train_rating)
-            for item_id in range(n_item):
-                index_item_tmp = self.index_item[item_id]
-                if len(index_item_tmp) == 0:
-                    self.Q[item_id,:] = 0.
-                    continue
-                sum_pu, sum_matrix = np.zeros((K)), np.zeros((K, K))
-                for record_ind in index_item_tmp:
-                    ## double-check
-                    if item_id != train_pair[record_ind][1]:
-                        raise ValueError('the item_id is waring in updating Q!')
-                    user_id, rating_tmp = train_pair[record_ind][0], train_rating[record_ind]
-                    sum_matrix = sum_matrix + np.outer(self.P[user_id,:], self.P[user_id,:])
-                    sum_pu = sum_pu + rating_tmp * self.P[user_id,:]                    
-                self.Q[item_id,:] = np.dot(np.linalg.inv(sum_matrix + lam*n_obs*np.identity(K)), sum_pu)
-            
-            for user_id in range(n_user):
-                index_user_tmp = self.index_user[user_id]
-                if len(index_user_tmp) == 0:
-                    self.P[user_id,:] = 0.
-                    continue
-                sum_pu, sum_matrix = np.zeros((K)), np.zeros((K, K))
-                for record_ind in index_user_tmp:
-                    ## double-check
-                    if user_id != train_pair[record_ind][0]:
-                        raise ValueError('the user_id is waring in updating P!')
-                    item_id, rating_tmp = train_pair[record_ind][1], train_rating[record_ind]
-                    sum_matrix = sum_matrix + np.outer(self.Q[item_id,:], self.Q[item_id,:])
-                    sum_pu = sum_pu + rating_tmp * self.Q[item_id,:]                    
-                self.P[user_id,:] = np.dot(np.linalg.inv(sum_matrix + lam*n_obs*np.identity(K)), sum_pu)
+            for j in range(n_obs):
+                user_id, item_id, rating_tmp = train_pair[j,0], train_pair[j,1], train_rating[j]
+                err_tmp = rating_tmp - np.dot(self.P[user_id,:], self.Q[item_id,:])
+                self.Q[item_id,:] = self.Q[item_id,:] + 2*learning_rate*err_tmp*self.P[user_id,:] - 2*learning_rate*lam*self.Q[item_id,:]
+                err_tmp = rating_tmp - np.dot(self.P[user_id,:], self.Q[item_id,:])
+                self.P[user_id,:] = self.P[user_id,:] + 2*learning_rate*self.Q[item_id,:] - 2*learning_rate*lam*self.P[user_id,:]
             # compute the new rmse score
             score_new = self.rmse(test_pair=train_pair, test_rating=train_rating)
-            diff = abs(score_new - score_old) / score_old
+            diff = - score_new + score_old
             if self.verbose:
                 print("Reg-LFM: ite: %d; diff: %.3f RMSE: %.3f" %(i, diff, score_new))
-            if(diff < tol):
+            if (diff < tol):
                 break
 
     def predict(self, test_pair):
