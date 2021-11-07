@@ -67,7 +67,7 @@ class item_mean(object):
 
 class LFM(object):
 
-    def __init__(self, n_user, n_item, lam=.001, K=10, iterNum=1000, tol=1e-4, verbose=1):
+    def __init__(self, n_user, n_item, lam=.001, K=10, iterNum=10, tol=1e-4, verbose=1):
         self.P = np.random.randn(n_user, K)
         self.Q = np.random.randn(n_item, K)
         # self.index_item = []
